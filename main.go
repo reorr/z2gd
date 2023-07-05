@@ -43,20 +43,25 @@ func main() {
 	if err != nil {
 		log.Printf("Error: %+v\n\n", err)
 	}
-	meets, err := zclient.GetAllMeetingRecordsSince(1577811600)
+	meets, err := zclient.GetAllMeetingRecordsSince(1685846792)
 	if err != nil {
 		log.Printf("Error: %+v\n\n", err)
 	}
 	log.Printf("Meetings count: %+v\n\n", len(meets))
 
-	filteredFileExtensionMeets := zoom.FilterRecordFiletype(meets, "TXT")
-	log.Printf("Filtered record file extension meetings count: %+v\n\n", len(filteredFileExtensionMeets))
+	meets = zoom.FilterRecordUniqueStartTimeAndId(meets)
+	log.Printf("Filtered uniq meeting records count: %+v\n\n", len(meets))
 
-	filteredUniqMeets := zoom.FilterRecordUniqueStartTimeAndId(filteredFileExtensionMeets)
-	log.Printf("Filtered uniq meeting records count: %+v\n\n", len(filteredUniqMeets))
+	meets = zoom.FilterRecordFiletype(meets, "TXT")
+	log.Printf("Filtered record file extension meetings count: %+v\n\n", len(meets))
 
-	for _, fm := range filteredUniqMeets {
-		err = syncRecordToDrive(srv, fm)
+	parentFolderId, err := gdrive.CreateParentFolder(srv)
+	if err != nil {
+		log.Panic("[ERROR] err = ", err.Error())
+	}
+
+	for _, fm := range meets {
+		err = syncRecordToDrive(srv, fm, parentFolderId)
 		if err != nil {
 			log.Printf("[ERROR] processing record with meet id = %d, topic = %s", fm.Id, fm.Topic)
 		}
@@ -108,10 +113,10 @@ func downloadFileInChunks(filepath string, filename string, url string, chunkSiz
 	return nil
 }
 
-func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting) error {
+func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting, parentFolderId string) error {
 	var err error
 	for _, fmr := range meet.Records {
-		downloadPath := fmt.Sprintf("/tmp/%s - %s - %d/", meet.Topic, meet.StartTime.Format("02-01-2006"), meet.Id)
+		downloadPath := fmt.Sprintf("/tmp/%s - %s - %d/", formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
 		fmt.Println(downloadPath)
 		downloadName := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
 		err := downloadFileInChunks(downloadPath, downloadName, fmr.DownloadURL, 10240)
@@ -119,7 +124,7 @@ func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting) error {
 			log.Printf("[ERROR] err = %s", err.Error())
 			break
 		}
-		err = gdrive.Upload(srv, downloadPath, downloadName)
+		err = gdrive.Upload(srv, parentFolderId, downloadPath, downloadName)
 		if err != nil {
 			log.Printf("[ERROR] err = %s", err.Error())
 			break

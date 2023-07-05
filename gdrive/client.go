@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +16,7 @@ import (
 )
 
 func ServiceAccount(credentialFile string) *http.Client {
-	b, err := ioutil.ReadFile(credentialFile)
+	b, err := os.ReadFile(credentialFile)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-func Upload(srv *drive.Service, filepath, filename string) error {
+func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error {
 	// baseMimeType := "text/plain"
 	file, err := os.Open(filepath + filename)
 	if err != nil {
@@ -17,12 +17,9 @@ func Upload(srv *drive.Service, filepath, filename string) error {
 	}
 	paths := strings.Split(filepath, "/")
 	foldername := paths[len(paths)-2]
-	// fileInf, err := file.Stat()
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
+
 	// create folder
-	createFolder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: []string{"1x56v5_6c0E3EQklgYTt4c_IiVgeHqFSD"}}).Do()
+	createFolder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: []string{parentFolderId}}).Do()
 	if err != nil {
 		log.Fatalf("Unable to create folder: %v", err)
 	}
@@ -40,4 +37,40 @@ func Upload(srv *drive.Service, filepath, filename string) error {
 	}
 	fmt.Printf("%v\n", res.DriveId)
 	return nil
+}
+
+func getFolderID(srv *drive.Service, folderName string) (string, error) {
+	query := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name='%s'", folderName)
+	resp, err := srv.Files.List().Q(query).Do()
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.Files) > 0 {
+		return resp.Files[0].Id, nil
+	}
+
+	return "", nil
+}
+
+func CreateParentFolder(srv *drive.Service) (string, error) {
+	parentFolderName := "Zoom Sync"
+	parentFolderID, err := getFolderID(srv, parentFolderName)
+	if err != nil {
+		log.Fatalf("Failed to check if folder exists: %v", err)
+		return "", err
+	}
+	if parentFolderID == "" {
+		// Create the folder if it doesn't exist
+		folder, err := srv.Files.Create(&drive.File{Name: parentFolderName, MimeType: "application/vnd.google-apps.folder"}).Do()
+		if err != nil {
+			log.Fatalf("Failed to create folder: %v", err)
+			return "", err
+		}
+		parentFolderID = folder.Id
+		fmt.Printf("Folder created with ID: %s\n", folder.Id)
+	} else {
+		fmt.Printf("Folder already exists with ID: %s\n", parentFolderID)
+	}
+	return parentFolderID, nil
 }
