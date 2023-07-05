@@ -123,10 +123,7 @@ func FilterRecordFiletype(ms []Meeting, recordFileExtension string) []Meeting {
 func FilterRecordType(ms []Meeting, recordType RecordType) []Meeting {
 	nms := ms[:0]
 	for _, m := range ms {
-		println(len(m.Records))
 		for _, r := range m.Records {
-			println(r.FileExtension)
-			println(r.Type)
 			if r.Type == recordType {
 				nmr := m.Records[:0]
 				nmr = append(nmr, r)

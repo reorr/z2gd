@@ -1,0 +1,14 @@
+zoom:
+  client_id: thisisclientid
+  client_secret: thisisclientsecret
+  account_id: thisisaccountid
+
+drive:
+  credentials: credentials.json
+
+client:
+  download_location: /tmp
+  file_type: MP4
+  record_type: chat_file
+  cutoff: 1685846792
+  dry_run: true

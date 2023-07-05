@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -16,16 +17,19 @@ import (
 )
 
 func main() {
-	var (
-		accountId    = os.Getenv("ZOOM_ACCOUNT_ID")
-		clientId     = os.Getenv("ZOOM_CLIENT_ID")
-		clientSecret = os.Getenv("ZOOM_CLIENT_SECRET")
-	)
+	var configFileName string
+	flag.StringVar(&configFileName, "c", "config.yml", "Config file name")
+
+	flag.Parse()
+
+	cfg := loadConfig(configFileName)
+
+	log.Println("config loaded")
 
 	zclient := zoom.NewZoomClient(zoom.Client{
-		AccountId: accountId,
-		Id:        clientId,
-		Secret:    clientSecret,
+		AccountId: cfg.ZoomCfg.AccountID,
+		Id:        cfg.ZoomCfg.ClientID,
+		Secret:    cfg.ZoomCfg.ClientSecret,
 	})
 
 	// gdclient := ServiceAccount("credential.json")
@@ -43,7 +47,7 @@ func main() {
 	if err != nil {
 		log.Printf("Error: %+v\n\n", err)
 	}
-	meets, err := zclient.GetAllMeetingRecordsSince(1685846792)
+	meets, err := zclient.GetAllMeetingRecordsSince(int(cfg.ClientCfg.Cutoff))
 	if err != nil {
 		log.Printf("Error: %+v\n\n", err)
 	}
@@ -52,18 +56,22 @@ func main() {
 	meets = zoom.FilterRecordUniqueStartTimeAndId(meets)
 	log.Printf("Filtered uniq meeting records count: %+v\n\n", len(meets))
 
-	meets = zoom.FilterRecordFiletype(meets, "TXT")
-	log.Printf("Filtered record file extension meetings count: %+v\n\n", len(meets))
+	meets = zoom.FilterRecordFiletype(meets, cfg.ClientCfg.FileType)
+	log.Printf("Filtered record file extension = %s,  meetings count: %+v\n\n", cfg.ClientCfg.FileType, len(meets))
 
-	parentFolderId, err := gdrive.CreateParentFolder(srv)
-	if err != nil {
-		log.Panic("[ERROR] err = ", err.Error())
-	}
+	meets = zoom.FilterRecordType(meets, zoom.RecordType(cfg.ClientCfg.RecordType))
+	log.Printf("Filtered record type = %s, meetings count: %+v\n\n", cfg.ClientCfg.RecordType, len(meets))
 
-	for _, fm := range meets {
-		err = syncRecordToDrive(srv, fm, parentFolderId)
+	if !cfg.ClientCfg.DryRun {
+		parentFolderId, err := gdrive.CreateParentFolder(srv)
 		if err != nil {
-			log.Printf("[ERROR] processing record with meet id = %d, topic = %s", fm.Id, fm.Topic)
+			log.Panic("[ERROR] err = ", err.Error())
+		}
+		for _, fm := range meets {
+			err = syncRecordToDrive(srv, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
+			if err != nil {
+				log.Printf("[ERROR] processing record with meet id = %d, topic = %s", fm.Id, fm.Topic)
+			}
 		}
 	}
 }
@@ -113,10 +121,10 @@ func downloadFileInChunks(filepath string, filename string, url string, chunkSiz
 	return nil
 }
 
-func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting, parentFolderId string) error {
+func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting, downloadLocation, parentFolderId string) error {
 	var err error
 	for _, fmr := range meet.Records {
-		downloadPath := fmt.Sprintf("/tmp/%s - %s - %d/", formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
+		downloadPath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
 		fmt.Println(downloadPath)
 		downloadName := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
 		err := downloadFileInChunks(downloadPath, downloadName, fmr.DownloadURL, 10240)
