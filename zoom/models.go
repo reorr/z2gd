@@ -121,6 +121,9 @@ func FilterRecordFiletype(ms []Meeting, recordFileExtension string) []Meeting {
 }
 
 func FilterRecordType(ms []Meeting, recordType RecordType) []Meeting {
+	if recordType == "all" {
+		return ms
+	}
 	nms := ms[:0]
 	for _, m := range ms {
 		for _, r := range m.Records {
