@@ -68,7 +68,7 @@ func main() {
 			log.Panic("[ERROR] err = ", err.Error())
 		}
 		for _, fm := range meets {
-			err = syncRecordToDrive(srv, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
+			err = syncMeetRecordToDrive(cfg, srv, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
 			if err != nil {
 				log.Printf("[ERROR] processing record with meet id = %d, topic = %s", fm.Id, fm.Topic)
 			}
@@ -121,27 +121,49 @@ func downloadFileInChunks(filepath string, filename string, url string, chunkSiz
 	return nil
 }
 
-func syncRecordToDrive(srv *drive.Service, meet zoom.Meeting, downloadLocation, parentFolderId string) error {
+func syncMeetRecordToDrive(cfg config, srv *drive.Service, meet zoom.Meeting, downloadLocation, parentFolderId string) error {
 	var err error
 	for _, fmr := range meet.Records {
-		downloadPath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
-		fmt.Println(downloadPath)
-		downloadName := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
-		err := downloadFileInChunks(downloadPath, downloadName, fmr.DownloadURL, 10240)
-		if err != nil {
-			log.Printf("[ERROR] err = %s", err.Error())
-			break
-		}
-		err = gdrive.Upload(srv, parentFolderId, downloadPath, downloadName)
-		if err != nil {
-			log.Printf("[ERROR] err = %s", err.Error())
-			break
-		}
-		err = os.RemoveAll(downloadPath)
-		if err != nil {
-			log.Printf("[ERROR] err = %s", err.Error())
-			break
+		retryCount := 0
+		for int(cfg.ClientCfg.Retry) >= retryCount {
+			downloadPath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
+			fmt.Println(downloadPath)
+			downloadName := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
+			err := syncRecordToDrive(srv, fmr, downloadPath, downloadName, parentFolderId)
+			if err != nil {
+				retryCount++
+				log.Printf("[ERROR] err = %s", err.Error())
+			} else {
+				break
+			}
 		}
 	}
 	return err
+}
+
+func syncRecordToDrive(srv *drive.Service, record zoom.Record, downloadPath, filename, parentFolderId string) error {
+	err := downloadFileInChunks(downloadPath, filename, record.DownloadURL, 1024000000)
+	if err != nil {
+		removeFolderIfExists(downloadPath)
+		return err
+	}
+	err = gdrive.Upload(srv, parentFolderId, downloadPath, filename)
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll(downloadPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeFolderIfExists(path string) error {
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

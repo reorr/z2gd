@@ -91,6 +91,7 @@ type clientConfig struct {
 	RecordType       string `yaml:"record_type" json:"record_type"`
 	Cutoff           uint   `yaml:"cutoff" json:"cutoff"`
 	DryRun           bool   `yaml:"dry_run" json:"dry_run"`
+	Retry            uint   `yaml:"retry" json:"retry"`
 }
 
 func defaultClientConfig() clientConfig {
@@ -100,6 +101,7 @@ func defaultClientConfig() clientConfig {
 		RecordType:       "chat_file",
 		Cutoff:           1688169600,
 		DryRun:           true,
+		Retry:            0,
 	}
 }
 
@@ -109,6 +111,7 @@ func (d *clientConfig) loadFromEnv() {
 	loadEnvStr("ZDG_CLIENT_RECORD_TYPE", &d.RecordType)
 	loadEnvUint("ZDG_CLIENT_CUTOFF", &d.Cutoff)
 	loadEnvBool("ZDG_CLIENT_DRY_RUN", &d.DryRun)
+	loadEnvUint("ZDG_CLIENT_Retry", &d.Retry)
 }
 
 type config struct {

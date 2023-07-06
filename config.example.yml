@@ -12,3 +12,4 @@ client:
   record_type: chat_file
   cutoff: 1685846792
   dry_run: true
+  retry: 0
