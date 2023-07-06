@@ -19,12 +19,12 @@ func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error
 	foldername := paths[len(paths)-2]
 
 	// create folder
-	createFolder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: []string{parentFolderId}}).Do()
+	topicFolderId, err := CreateFolderIfNotExists(srv, foldername, parentFolderId)
 	if err != nil {
 		log.Fatalf("Unable to create folder: %v", err)
 	}
 	var folderIDList []string
-	folderIDList = append(folderIDList, createFolder.Id)
+	folderIDList = append(folderIDList, topicFolderId)
 	defer file.Close()
 	f := &drive.File{Name: filename, Parents: folderIDList}
 	res, err := srv.Files.
@@ -39,8 +39,11 @@ func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error
 	return nil
 }
 
-func getFolderID(srv *drive.Service, folderName string) (string, error) {
-	query := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name='%s'", folderName)
+func getFolderID(srv *drive.Service, foldername string, parentId string) (string, error) {
+	query := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name='%s'", foldername)
+	if parentId != "" {
+		query = fmt.Sprintf("%s and '%s' in parents", query, parentId)
+	}
 	resp, err := srv.Files.List().Q(query).Do()
 	if err != nil {
 		return "", err
@@ -53,16 +56,15 @@ func getFolderID(srv *drive.Service, folderName string) (string, error) {
 	return "", nil
 }
 
-func CreateParentFolder(srv *drive.Service) (string, error) {
-	parentFolderName := "Zoom Sync"
-	parentFolderID, err := getFolderID(srv, parentFolderName)
+func CreateFolderIfNotExists(srv *drive.Service, foldername, parentId string) (string, error) {
+	parentFolderID, err := getFolderID(srv, foldername, parentId)
 	if err != nil {
 		log.Fatalf("Failed to check if folder exists: %v", err)
 		return "", err
 	}
 	if parentFolderID == "" {
 		// Create the folder if it doesn't exist
-		folder, err := srv.Files.Create(&drive.File{Name: parentFolderName, MimeType: "application/vnd.google-apps.folder"}).Do()
+		folder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: []string{}}).Do()
 		if err != nil {
 			log.Fatalf("Failed to create folder: %v", err)
 			return "", err

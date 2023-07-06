@@ -63,7 +63,7 @@ func main() {
 	log.Printf("Filtered record type = %s, meetings count: %+v\n\n", cfg.ClientCfg.RecordType, len(meets))
 
 	if !cfg.ClientCfg.DryRun {
-		parentFolderId, err := gdrive.CreateParentFolder(srv)
+		parentFolderId, err := gdrive.CreateFolderIfNotExists(srv, "Zoom Sync 2", "")
 		if err != nil {
 			log.Panic("[ERROR] err = ", err.Error())
 		}
