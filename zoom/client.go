@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -88,7 +89,7 @@ func (z *ZoomClient) Authorize() error {
 		return err
 	}
 
-	log.Printf("[DEBUG] token = %v", z.token.AccessToken)
+	log.Debug().Any("zoom token", z.token.AccessToken)
 
 	dur, err := time.ParseDuration(fmt.Sprintf("%ds", z.token.ExpiresIn))
 	if err != nil {
@@ -125,9 +126,8 @@ func (z *ZoomClient) GetMeetingRecordings() ([]Meeting, error) {
 	params.Add(`page_size`, "300")
 	params.Add(`from`, from.Format("2006-01-02"))
 	params.Add(`to`, to.Format("2006-01-02"))
-	log.Printf("[DEBUG] initial params = %s", params.Encode())
 	path := "/users/me/recordings"
-	log.Printf("[DEBUG] end = %s", z.endpoint+path)
+
 	req, err := http.NewRequest(http.MethodGet, z.endpoint+path+params.Encode(), nil)
 	if err != nil {
 		return nil, err
@@ -139,41 +139,10 @@ func (z *ZoomClient) GetMeetingRecordings() ([]Meeting, error) {
 
 	meetings := []Meeting{}
 
-	// for int(from.Unix()) >= cutoff {
-	// 	log.Printf("[DEBUG] params = %s", params.Encode())
-	// 	req.URL.RawQuery = params.Encode()
-	// 	res, err := z.client.Do(req)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	defer res.Body.Close()
-
-	// 	if res.StatusCode != http.StatusOK {
-	// 		return nil, fmt.Errorf("unable to authorize with account id: %s and client id: %s, status %d, message: %s", z.cfg.AccountId, z.cfg.Id, res.StatusCode, res.Body)
-	// 	}
-
-	// 	recordings := &Recordings{}
-
-	// 	if err := json.NewDecoder(res.Body).Decode(recordings); err != nil {
-	// 		return nil, err
-	// 	}
-
-	// 	meetings = append(meetings, recordings.Meetings...)
-
-	// 	from = from.AddDate(0, 0, -30)
-	// 	to = to.AddDate(0, 0, -30)
-
-	// 	log.Printf("[DEBUG] from = %v", from)
-	// 	log.Printf("[DEBUG] from = %v", to)
-	// 	time.Sleep(500 * time.Millisecond) // avoid rate limit
-
-	// 	params.Set(`from`, from.Format("2006-01-02"))
-	// 	params.Set(`to`, to.Format("2006-01-02"))
-	// 	time.Sleep(500 * time.Millisecond) // avoid rate limit
-	// }
-
 	for {
-		log.Printf("[DEBUG] params = %s", params.Encode())
+		log.Debug().Any("params", params.Encode())
+		log.Debug().Any("endpoint", z.endpoint+path)
+
 		req.URL.RawQuery = params.Encode()
 		res, err := z.client.Do(req)
 		if err != nil {
@@ -328,8 +297,12 @@ func (z *ZoomClient) GetAllMeetingRecordsSince(cutoff int) ([]Meeting, error) {
 	params.Add(`page_size`, "300")
 	params.Add(`from`, from.Format("2006-01-02"))
 	params.Add(`to`, to.Format("2006-01-02"))
-	log.Printf("[DEBUG] initial params = %s", params.Encode())
-	req, err := http.NewRequest(http.MethodGet, "https://api.zoom.us/v2/users/me/recordings?"+params.Encode(), nil)
+
+	path := "/users/me/recordings"
+	endpoint := z.endpoint + path
+	log.Debug().Any("endpoint", endpoint)
+
+	req, err := http.NewRequest(http.MethodGet, endpoint+"?"+params.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +314,8 @@ func (z *ZoomClient) GetAllMeetingRecordsSince(cutoff int) ([]Meeting, error) {
 	meetings := []Meeting{}
 
 	for int(to.Unix()) >= cutoff {
-		log.Printf("[DEBUG] params = %s", params.Encode())
+		log.Debug().Any("params", params.Encode())
+
 		req.URL.RawQuery = params.Encode()
 		res, err := z.client.Do(req)
 		if err != nil {

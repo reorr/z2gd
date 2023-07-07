@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,18 +12,29 @@ import (
 	"z2gd/gdrive"
 	"z2gd/zoom"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/api/drive/v3"
 )
 
 func main() {
-	var configFileName string
+	var (
+		configFileName string
+		debug          bool
+	)
 	flag.StringVar(&configFileName, "c", "config.yml", "Config file name")
+	flag.BoolVar(&debug, "d", false, "sets log level to debug")
 
 	flag.Parse()
 
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+
 	cfg := loadConfig(configFileName)
 
-	log.Println("config loaded")
+	log.Debug().Any("config", cfg).Msg("config loaded")
 
 	zclient := zoom.NewZoomClient(zoom.Client{
 		AccountId: cfg.ZoomCfg.AccountID,
@@ -32,45 +42,40 @@ func main() {
 		Secret:    cfg.ZoomCfg.ClientSecret,
 	})
 
-	// gdclient := ServiceAccount("credential.json")
-	// srv, err := drive.New(gdclient)
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-
 	srv, err := gdrive.NewService(context.Background())
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal().Err(err).Msg("Failed to connect google drive service")
 	}
 
 	err = zclient.Authorize()
 	if err != nil {
-		log.Printf("Error: %+v\n\n", err)
+		log.Fatal().Err(err).Msg("Failed to connect zoom service")
 	}
+
 	meets, err := zclient.GetAllMeetingRecordsSince(int(cfg.ClientCfg.Cutoff))
 	if err != nil {
-		log.Printf("Error: %+v\n\n", err)
+		log.Fatal().Err(err).Msg("Failed to get meeting record data")
 	}
-	log.Printf("Meetings count: %+v\n\n", len(meets))
+	log.Info().Msg(fmt.Sprintf("Total meet count = %d", len(meets)))
 
 	meets = zoom.FilterRecordUniqueStartTimeAndId(meets)
-	log.Printf("Filtered uniq meeting records count: %+v\n\n", len(meets))
+	log.Info().Msg(fmt.Sprintf("Total unique meet count = %d", len(meets)))
 
 	meets = zoom.FilterRecordFiletype(meets, cfg.ClientCfg.FileType)
-	log.Printf("Filtered record file extension = %s,  meetings count: %+v\n\n", cfg.ClientCfg.FileType, len(meets))
+	log.Info().Msg(fmt.Sprintf("Total filtered record file extension = %s, meet count = %d", cfg.ClientCfg.FileType, len(meets)))
 
 	meets = zoom.FilterRecordType(meets, zoom.RecordType(cfg.ClientCfg.RecordType))
-	log.Printf("Filtered record type = %s, meetings count: %+v\n\n", cfg.ClientCfg.RecordType, len(meets))
+	log.Info().Msg(fmt.Sprintf("Total filtered record type = %s, meet count = %d", cfg.ClientCfg.RecordType, len(meets)))
 
 	if !cfg.ClientCfg.DryRun {
 		parentFolderId, err := gdrive.CreateFolderIfNotExists(srv, cfg.DriveCfg.FolderName, "")
 		if err != nil {
-			log.Panic("[ERROR] err = ", err.Error())
+			log.Fatal().Err(err).Msg("Failed create google drive base folder")
 		}
 		for _, fm := range meets {
 			err = syncMeetRecordToDrive(cfg, srv, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
 			if err != nil {
-				log.Printf("[ERROR] processing record with meet id = %d, topic = %s", fm.Id, fm.Topic)
+				log.Error().Err(err).Msg(fmt.Sprintf("Failed to process record with meet id = %d, topic = %s", fm.Id, fm.Topic))
 			}
 		}
 	}
@@ -79,8 +84,10 @@ func main() {
 func downloadFileInChunks(filepath string, filename string, url string, chunkSize int) error {
 	err := os.MkdirAll(filepath, os.ModePerm)
 	if err != nil {
-		log.Println(err)
+		log.Fatal().Err(err).Msg("Failed create download folder")
 	}
+
+	log.Debug().Any("filepath", filepath).Msg("Topic download folder created")
 
 	resp, err := http.Head(url)
 	if err != nil {
@@ -118,6 +125,7 @@ func downloadFileInChunks(filepath string, filename string, url string, chunkSiz
 		resp.Body.Close()
 	}
 
+	log.Info().Any("download path", filepath+filename).Msg("Record downloaded")
 	return nil
 }
 
@@ -127,13 +135,13 @@ func syncMeetRecordToDrive(cfg config, srv *drive.Service, meet zoom.Meeting, do
 		retryCount := 0
 		for int(cfg.ClientCfg.Retry) >= retryCount {
 			filepath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
-			fmt.Println(filepath)
 			filename := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
 			err := syncRecordToDrive(srv, fmr, filepath, filename, parentFolderId)
 			if err != nil {
+				log.Error().Err(err).Msg(fmt.Sprintf("Failed to sync record from meeting = %s, retry count = %d", meet.Topic, retryCount))
 				retryCount++
-				log.Printf("[ERROR] err = %s", err.Error())
 			} else {
+				log.Info().Str("topic", meet.Topic).Str("extension", fmr.FileExtension).Str("type", string(fmr.Type)).Msg("Record synced to google drive")
 				break
 			}
 		}

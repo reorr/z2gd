@@ -2,10 +2,10 @@ package gdrive
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"google.golang.org/api/drive/v3"
 )
 
@@ -13,7 +13,7 @@ func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error
 	// baseMimeType := "text/plain"
 	file, err := os.Open(filepath + filename)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal().Err(err).Msg("Failed to open download folder")
 	}
 	paths := strings.Split(filepath, "/")
 	foldername := paths[len(paths)-2]
@@ -21,7 +21,8 @@ func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error
 	// create folder
 	topicFolderId, err := CreateFolderIfNotExists(srv, foldername, parentFolderId)
 	if err != nil {
-		log.Fatalf("Unable to create folder: %v", err)
+		log.Error().Err(err).Msg("Failed create google drive base folder")
+		return err
 	}
 	var parentFolders []string
 	parentFolders = append(parentFolders, topicFolderId)
@@ -44,6 +45,9 @@ func getFolderID(srv *drive.Service, foldername string, parentFolderId string) (
 	if parentFolderId != "" {
 		query = fmt.Sprintf("%s and '%s' in parents", query, parentFolderId)
 	}
+
+	log.Debug().Any("search query", query).Msg("Search folder name")
+
 	resp, err := srv.Files.List().Q(query).Do()
 	if err != nil {
 		return "", err
@@ -61,7 +65,6 @@ func getFolderID(srv *drive.Service, foldername string, parentFolderId string) (
 func CreateFolderIfNotExists(srv *drive.Service, foldername, parentFolderId string) (string, error) {
 	folderId, err := getFolderID(srv, foldername, parentFolderId)
 	if err != nil {
-		log.Fatalf("Failed to check if folder exists: %v", err)
 		return "", err
 	}
 	if folderId == "" {
@@ -72,13 +75,12 @@ func CreateFolderIfNotExists(srv *drive.Service, foldername, parentFolderId stri
 		// Create the folder if it doesn't exist
 		folder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: parentFolders}).Do()
 		if err != nil {
-			log.Fatalf("Failed to create folder: %v", err)
 			return "", err
 		}
 		folderId = folder.Id
-		fmt.Printf("Folder created with ID: %s\n", folder.Id)
+		log.Debug().Any("folder id", folder.Id).Msg("Folder created")
 	} else {
-		fmt.Printf("Folder already exists with ID: %s\n", folderId)
+		log.Debug().Any("folder id", folderId).Msg("Folder found")
 	}
 	return folderId, nil
 }
