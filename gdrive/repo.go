@@ -63,8 +63,12 @@ func CreateFolderIfNotExists(srv *drive.Service, foldername, parentId string) (s
 		return "", err
 	}
 	if parentFolderID == "" {
+		parents := []string{}
+		if parentId != "" {
+			parents = append(parents, parentId)
+		}
 		// Create the folder if it doesn't exist
-		folder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: []string{}}).Do()
+		folder, err := srv.Files.Create(&drive.File{Name: foldername, MimeType: "application/vnd.google-apps.folder", Parents: parents}).Do()
 		if err != nil {
 			log.Fatalf("Failed to create folder: %v", err)
 			return "", err
