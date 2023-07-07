@@ -126,10 +126,10 @@ func syncMeetRecordToDrive(cfg config, srv *drive.Service, meet zoom.Meeting, do
 	for _, fmr := range meet.Records {
 		retryCount := 0
 		for int(cfg.ClientCfg.Retry) >= retryCount {
-			downloadPath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
-			fmt.Println(downloadPath)
-			downloadName := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
-			err := syncRecordToDrive(srv, fmr, downloadPath, downloadName, parentFolderId)
+			filepath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.StartTime.Format("02-01-2006"), meet.Id)
+			fmt.Println(filepath)
+			filename := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
+			err := syncRecordToDrive(srv, fmr, filepath, filename, parentFolderId)
 			if err != nil {
 				retryCount++
 				log.Printf("[ERROR] err = %s", err.Error())
@@ -141,17 +141,17 @@ func syncMeetRecordToDrive(cfg config, srv *drive.Service, meet zoom.Meeting, do
 	return err
 }
 
-func syncRecordToDrive(srv *drive.Service, record zoom.Record, downloadPath, filename, parentFolderId string) error {
-	err := downloadFileInChunks(downloadPath, filename, record.DownloadURL, 1024000000)
+func syncRecordToDrive(srv *drive.Service, record zoom.Record, filepath, filename, parentFolderId string) error {
+	err := downloadFileInChunks(filepath, filename, record.DownloadURL, 1024000000)
 	if err != nil {
-		removeFolderIfExists(downloadPath)
+		removeFolderIfExists(filepath)
 		return err
 	}
-	err = gdrive.Upload(srv, parentFolderId, downloadPath, filename)
+	err = gdrive.Upload(srv, parentFolderId, filepath, filename)
 	if err != nil {
 		return err
 	}
-	err = os.RemoveAll(downloadPath)
+	err = os.RemoveAll(filepath)
 	if err != nil {
 		return err
 	}
