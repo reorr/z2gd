@@ -73,16 +73,19 @@ func (z *zoomConfig) loadFromEnv() {
 
 type driveConfig struct {
 	Credentials string `yaml:"credentials" json:"credentials"`
+	FolderName  string `yaml:"folder_name" json:"folder_name"`
 }
 
 func defaultDriveConfig() driveConfig {
 	return driveConfig{
 		Credentials: "credentials.json",
+		FolderName:  "z2gd",
 	}
 }
 
 func (d *driveConfig) loadFromEnv() {
 	loadEnvStr("ZDG_DRIVE_CREDENTIALS", &d.Credentials)
+	loadEnvStr("ZDG_DRIVE_FOLDER_NAME", &d.FolderName)
 }
 
 type clientConfig struct {

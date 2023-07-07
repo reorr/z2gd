@@ -5,6 +5,7 @@ zoom:
 
 drive:
   credentials: credentials.json
+  folder_name: z2gd
 
 client:
   download_location: /tmp
