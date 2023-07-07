@@ -50,7 +50,9 @@ func getFolderID(srv *drive.Service, foldername string, parentFolderId string) (
 	}
 
 	if len(resp.Files) > 0 {
-		return resp.Files[0].Id, nil
+		if !resp.Files[0].Trashed {
+			return resp.Files[0].Id, nil
+		}
 	}
 
 	return "", nil
