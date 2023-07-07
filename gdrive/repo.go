@@ -36,7 +36,7 @@ func Upload(srv *drive.Service, parentFolderId, filepath, filename string) error
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%v\n", res.DriveId)
+	log.Debug().Any("file", res).Msg("Uploaded")
 	return nil
 }
 
