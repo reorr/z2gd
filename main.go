@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"z2gd/gdrive"
+	"z2gd/storage"
 	"z2gd/zoom"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/api/drive/v3"
@@ -35,6 +37,11 @@ func main() {
 	cfg := loadConfig(configFileName)
 
 	log.Debug().Any("config", cfg).Msg("config loaded")
+
+	sqliteDatabase, err := storage.NewStorage(cfg.ClientCfg.DbLocation)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to connect sqlite")
+	}
 
 	zclient := zoom.NewZoomClient(zoom.Client{
 		AccountId: cfg.ZoomCfg.AccountID,
@@ -66,6 +73,13 @@ func main() {
 
 	meets = zoom.FilterRecordType(meets, zoom.RecordType(cfg.ClientCfg.RecordType))
 	log.Info().Msg(fmt.Sprintf("Total filtered record type = %s, meet count = %d", cfg.ClientCfg.RecordType, len(meets)))
+
+	for _, fm := range meets {
+		err = sqliteDatabase.SaveMeeting(fm)
+		if err != nil {
+			log.Error().Err(err).Msg(fmt.Sprintf("Failed to save meeting to db with meet id = %d, topic = %s", fm.Id, fm.Topic))
+		}
+	}
 
 	if !cfg.ClientCfg.DryRun {
 		parentFolderId, err := gdrive.CreateFolderIfNotExists(srv, cfg.DriveCfg.FolderName, "")
