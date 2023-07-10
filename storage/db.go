@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"z2gd/zoom"
@@ -57,7 +58,7 @@ func (s *SQLiteStorage) SaveMeeting(meeting zoom.Meeting) error {
 	// convert time to local
 	meeting.StartTime = meeting.StartTime.Local()
 
-	q := "INSERT INTO `meetings`(uuid, id, topic, startTime) VALUES ($1, $2, $3, $4)"
+	q := "INSERT INTO `meetings`(uuid, id, topic, startTime) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING"
 	log.Debug().Msg("Saving meeting")
 
 	_, err := s.DB.ExecContext(context.Background(), q,
@@ -88,7 +89,7 @@ func (s *SQLiteStorage) saveRecord(record zoom.Record) error {
 	// convert time to local
 	record.StartTime = record.StartTime.Local()
 
-	q := "INSERT INTO `records` VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+	q := "INSERT INTO `records` VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT DO NOTHING"
 	_, err := s.DB.ExecContext(context.Background(), q,
 		record.Id,                              // id
 		record.MeetingId,                       // meetingId
@@ -101,4 +102,19 @@ func (s *SQLiteStorage) saveRecord(record zoom.Record) error {
 		record.Status,                          // status
 		record.FilePath)                        // path
 	return err
+}
+
+// GetMeeting returns a meeting from the database
+func (s *SQLiteStorage) GetMeeting(UUID string) (*zoom.Meeting, error) {
+	q := "SELECT * FROM `meetings` WHERE uuid = $1"
+	row := s.DB.QueryRowContext(context.Background(), q, UUID)
+	meeting := zoom.Meeting{}
+	err := row.Scan(&meeting.UUID, &meeting.Id, &meeting.Topic, &meeting.DateTime)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("aaaa")
+		}
+		return nil, err
+	}
+	return &meeting, nil
 }

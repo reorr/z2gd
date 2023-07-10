@@ -79,6 +79,11 @@ func main() {
 		if err != nil {
 			log.Error().Err(err).Msg(fmt.Sprintf("Failed to save meeting to db with meet id = %d, topic = %s", fm.Id, fm.Topic))
 		}
+		mt, err := sqliteDatabase.GetMeeting(fm.UUID)
+		if err != nil {
+			log.Error().Err(err).Msg(fmt.Sprintf("Failed to save meeting to db with meet id = %d, topic = %s", fm.Id, fm.Topic))
+		}
+		log.Info().Any("meet", mt)
 	}
 
 	if !cfg.ClientCfg.DryRun {
