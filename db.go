@@ -1,12 +1,10 @@
-package storage
+package main
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"time"
-
-	"z2gd/zoom"
 
 	"github.com/rs/zerolog/log"
 )
@@ -54,7 +52,7 @@ func NewStorage(path string) (*SQLiteStorage, error) {
 }
 
 // SaveMeeting saves a meeting to the database
-func (s *SQLiteStorage) SaveMeeting(meeting zoom.Meeting) error {
+func (s *SQLiteStorage) SaveMeeting(meeting Meeting) error {
 	// convert time to local
 	meeting.StartTime = meeting.StartTime.Local()
 
@@ -81,9 +79,9 @@ func (s *SQLiteStorage) SaveMeeting(meeting zoom.Meeting) error {
 }
 
 // SaveRecord saves a record to the database
-func (s *SQLiteStorage) saveRecord(record zoom.Record) error {
+func (s *SQLiteStorage) saveRecord(record Record) error {
 	if record.Status == "" {
-		record.Status = zoom.Queued
+		record.Status = Queued
 	}
 
 	// convert time to local
@@ -105,10 +103,10 @@ func (s *SQLiteStorage) saveRecord(record zoom.Record) error {
 }
 
 // GetMeeting returns a meeting from the database
-func (s *SQLiteStorage) GetMeeting(UUID string) (*zoom.Meeting, error) {
+func (s *SQLiteStorage) GetMeeting(UUID string) (*Meeting, error) {
 	q := "SELECT * FROM `meetings` WHERE uuid = $1"
 	row := s.DB.QueryRowContext(context.Background(), q, UUID)
-	meeting := zoom.Meeting{}
+	meeting := Meeting{}
 	err := row.Scan(&meeting.UUID, &meeting.Id, &meeting.Topic, &meeting.DateTime)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -120,7 +118,7 @@ func (s *SQLiteStorage) GetMeeting(UUID string) (*zoom.Meeting, error) {
 }
 
 // GetRecords returns records of specific meeting from the database
-func (s *SQLiteStorage) GetRecords(UUID string) ([]zoom.Record, error) {
+func (s *SQLiteStorage) GetRecords(UUID string) ([]Record, error) {
 	q := "SELECT * FROM `records` WHERE meetingId = $1"
 	rows, err := s.DB.QueryContext(context.Background(), q, UUID)
 	if err != nil {
@@ -128,9 +126,9 @@ func (s *SQLiteStorage) GetRecords(UUID string) ([]zoom.Record, error) {
 	}
 	defer rows.Close()
 
-	var records []zoom.Record
+	var records []Record
 	for rows.Next() {
-		record := zoom.Record{}
+		record := Record{}
 		err := rows.Scan(
 			&record.Id,
 			&record.MeetingId,
@@ -150,7 +148,7 @@ func (s *SQLiteStorage) GetRecords(UUID string) ([]zoom.Record, error) {
 	return records, nil
 }
 
-func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType, fileExtension string) ([]zoom.Record, error) {
+func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType, fileExtension string) ([]Record, error) {
 	q := "SELECT * FROM `records` WHERE meetingId = $1 AND fileExtension = $2 AND type = $3"
 	if recordType == "all" {
 		q = "SELECT * FROM `records` WHERE meetingId = $1 AND fileExtension = $2"
@@ -162,9 +160,9 @@ func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType,
 	}
 	defer rows.Close()
 
-	var records []zoom.Record
+	var records []Record
 	for rows.Next() {
-		record := zoom.Record{}
+		record := Record{}
 		err := rows.Scan(
 			&record.Id,
 			&record.MeetingId,
@@ -184,10 +182,10 @@ func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType,
 	return records, nil
 }
 
-func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtension, recordType, cutoff string) ([]zoom.Meeting, error) {
-	q := "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 AND records.type = $3 GROUP BY meetings.uuid ORDER BY meetings.startTime;"
+func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtension, recordType, cutoff string) ([]Meeting, error) {
+	q := "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 AND records.type = $3 GROUP BY meetings.uuid ORDER BY meetings.startTime DESC;"
 	if recordType == "all" {
-		q = "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 GROUP BY meetings.uuid ORDER BY meetings.startTime;"
+		q = "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 GROUP BY meetings.uuid ORDER BY meetings.startTime DESC;"
 	}
 	log.Debug().Any("query", q).Msg("Find meetings by query")
 	rows, err := s.DB.QueryContext(context.Background(), q, cutoff, fileExtension, recordType)
@@ -196,9 +194,9 @@ func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtensi
 	}
 	defer rows.Close()
 
-	var meetings []zoom.Meeting
+	var meetings []Meeting
 	for rows.Next() {
-		meeting := zoom.Meeting{}
+		meeting := Meeting{}
 		err := rows.Scan(
 			&meeting.UUID,
 			&meeting.Id,
@@ -219,7 +217,7 @@ func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtensi
 }
 
 // GetMeeting returns a meeting from the database
-func (s *SQLiteStorage) GetMeetingWithRecords(UUID string) (*zoom.Meeting, error) {
+func (s *SQLiteStorage) GetMeetingWithRecords(UUID string) (*Meeting, error) {
 	q := "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime, records.id, records.meetingId, records.type, records.startTime, records.fileExtension, records.fileSize, records.downUrl, records.playUrl, records.status  FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.uuid = $1"
 	rows, err := s.DB.Query(q, UUID)
 	if err != nil {
@@ -228,9 +226,9 @@ func (s *SQLiteStorage) GetMeetingWithRecords(UUID string) (*zoom.Meeting, error
 		}
 		return nil, err
 	}
-	meeting := &zoom.Meeting{}
+	meeting := &Meeting{}
 	for rows.Next() {
-		record := &zoom.Record{}
+		record := &Record{}
 		err = rows.Scan(
 			meeting.UUID,
 			meeting.Id,
@@ -255,7 +253,7 @@ func (s *SQLiteStorage) GetMeetingWithRecords(UUID string) (*zoom.Meeting, error
 }
 
 // UpdateRecord updates a record in the database
-func (s *SQLiteStorage) UpdateRecord(Id string, status zoom.RecordStatus) error {
+func (s *SQLiteStorage) UpdateRecord(Id string, status RecordStatus) error {
 	q := "UPDATE `records` SET status = $1 WHERE id = $2"
 	_, err := s.DB.ExecContext(context.Background(), q, status, Id)
 	return err
@@ -268,7 +266,7 @@ func (s *SQLiteStorage) ResetFailedRecords() error {
 	return err
 }
 
-func (s *SQLiteStorage) CountRecordsByFileExtensionAndTypeAndStatus(fileExtension string, recordType zoom.RecordType, status zoom.RecordStatus) (uint, error) {
+func (s *SQLiteStorage) CountRecordsByFileExtensionAndTypeAndStatus(fileExtension string, recordType RecordType, status RecordStatus) (uint, error) {
 	q := "SELECT COUNT(*) FROM `records` WHERE status =  $1 AND fileExtension = $2 AND type = $3"
 	if recordType == "all" {
 		q = "SELECT COUNT(*) FROM `records` WHERE status =  $1 AND fileExtension = $2"
@@ -288,7 +286,7 @@ func (s *SQLiteStorage) CountRecordsByFileExtensionAndTypeAndStatus(fileExtensio
 	return count, err
 }
 
-func (s *SQLiteStorage) CountUnsuccessSyncRecords(fileExtension string, recordType zoom.RecordType, cutoff string) (uint, error) {
+func (s *SQLiteStorage) CountUnsuccessSyncRecords(fileExtension string, recordType RecordType, cutoff string) (uint, error) {
 	q := "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2 AND type = $3"
 	if recordType == "all" {
 		q = "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2"

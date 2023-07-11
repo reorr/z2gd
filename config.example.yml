@@ -8,6 +8,7 @@ drive:
   folder_name: z2gd
 
 client:
+  fetch_api: false
   download_location: /tmp
   db_location: file:./data.db
   file_type: MP4

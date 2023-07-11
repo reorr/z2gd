@@ -100,6 +100,7 @@ func (d *driveConfig) loadFromEnv() {
 }
 
 type clientConfig struct {
+	FetchAPI         bool     `yaml:"fetch_api" json:"fetch_api"`
 	DownloadLocation string   `yaml:"download_location" json:"download_location"`
 	DbLocation       string   `yaml:"db_location" json:"db_location"`
 	FileType         string   `yaml:"file_type" json:"file_type"`
@@ -112,6 +113,7 @@ type clientConfig struct {
 
 func defaultClientConfig() clientConfig {
 	return clientConfig{
+		FetchAPI:         true,
 		DownloadLocation: "/tmp",
 		DbLocation:       "./data.db",
 		FileType:         "TXT",
@@ -124,6 +126,7 @@ func defaultClientConfig() clientConfig {
 }
 
 func (d *clientConfig) loadFromEnv() {
+	loadEnvBool("ZDG_CLIENT_FETCH_API", &d.FetchAPI)
 	loadEnvStr("ZDG_CLIENT_DOWNLOAD_LOCATION", &d.DownloadLocation)
 	loadEnvStr("ZDG_CLIENT_DB_LOCATION", &d.DbLocation)
 	loadEnvStr("ZDG_CLIENT_FILE_TYPE", &d.FileType)

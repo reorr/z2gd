@@ -1,4 +1,4 @@
-package zoom
+package main
 
 import (
 	"fmt"
@@ -148,6 +148,29 @@ func FilterRecordUniqueStartTimeAndId(ms []Meeting) []Meeting {
 	uniqMeets := make([]Meeting, 0)
 	for _, uid := range ms {
 		uniqness := uid.StartTime.Unix() + int64(uid.Id)
+		// if the user ID has been processed already, we skip it
+		if _, ok := processed[uniqness]; ok {
+			continue
+		}
+
+		// append a unique user ID to the resulting slice.
+		uniqMeets = append(uniqMeets, uid)
+
+		// mark the user ID as existing.
+		processed[uniqness] = struct{}{}
+	}
+
+	return uniqMeets
+}
+
+func FilterRecordUniqueUUID(ms []Meeting) []Meeting {
+	// we need only to check the map's keys so we use the empty struct as values
+	// since it consumes 0 bytes of memory.
+	processed := make(map[string]struct{})
+
+	uniqMeets := make([]Meeting, 0)
+	for _, uid := range ms {
+		uniqness := uid.UUID
 		// if the user ID has been processed already, we skip it
 		if _, ok := processed[uniqness]; ok {
 			continue

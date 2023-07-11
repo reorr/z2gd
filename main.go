@@ -9,9 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"z2gd/gdrive"
-	"z2gd/storage"
-	"z2gd/zoom"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
@@ -19,10 +16,16 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
+var (
+	sqliteDatabase *SQLiteStorage
+	driveService   *drive.Service
+)
+
 func main() {
 	var (
 		configFileName string
 		debug          bool
+		err            error
 	)
 	flag.StringVar(&configFileName, "c", "config.yml", "Config file name")
 	flag.BoolVar(&debug, "d", false, "sets log level to debug")
@@ -38,50 +41,34 @@ func main() {
 
 	log.Debug().Any("config", cfg).Msg("config loaded")
 
-	sqliteDatabase, err := storage.NewStorage(cfg.ClientCfg.DbLocation)
+	sqliteDatabase, err = NewStorage(cfg.ClientCfg.DbLocation)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect sqlite")
 	}
 
-	zclient := zoom.NewZoomClient(zoom.Client{
-		AccountId: cfg.ZoomCfg.AccountID,
-		Id:        cfg.ZoomCfg.ClientID,
-		Secret:    cfg.ZoomCfg.ClientSecret,
-	})
-
-	srv, err := gdrive.NewService(context.Background())
+	driveService, err = NewDriveService(context.Background())
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect google drive service")
 	}
 
-	err = zclient.Authorize()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect zoom service")
-	}
-
-	zoomMeets, err := zclient.GetAllMeetingRecordsSince(cfg.ClientCfg.UserIds, int(cfg.ClientCfg.Cutoff))
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get meeting record data")
-	}
-	log.Info().Msg(fmt.Sprintf("Total meet count = %d", len(zoomMeets)))
-
-	zoomMeets = zoom.FilterRecordUniqueStartTimeAndId(zoomMeets)
-	log.Info().Msg(fmt.Sprintf("Total unique meet count = %d", len(zoomMeets)))
-
-	// zoomMeets = zoom.FilterRecordFiletype(zoomMeets, cfg.ClientCfg.FileType)
-	// log.Info().Msg(fmt.Sprintf("Total filtered record file extension = %s, meet count = %d", cfg.ClientCfg.FileType, len(zoomMeets)))
-
-	// zoomMeets = zoom.FilterRecordType(zoomMeets, zoom.RecordType(cfg.ClientCfg.RecordType))
-	// log.Info().Msg(fmt.Sprintf("Total filtered record type = %s, meet count = %d", cfg.ClientCfg.RecordType, len(zoomMeets)))
-
-	for _, fm := range zoomMeets {
-		err = sqliteDatabase.SaveMeeting(fm)
+	if cfg.ClientCfg.FetchAPI {
+		zclient := NewZoomClient(Client{
+			AccountId: cfg.ZoomCfg.AccountID,
+			Id:        cfg.ZoomCfg.ClientID,
+			Secret:    cfg.ZoomCfg.ClientSecret,
+		})
+		err = zclient.Authorize()
 		if err != nil {
-			log.Error().Err(err).Msg(fmt.Sprintf("Failed to save meeting to db with meet id = %d, topic = %s", fm.Id, fm.Topic))
+			log.Fatal().Err(err).Msg("Failed to connect zoom service")
+		}
+
+		err := zclient.FetchAllMeetingRecordsSince(cfg.ClientCfg.UserIds, int(cfg.ClientCfg.Cutoff))
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to get meeting record data")
 		}
 	}
 
-	previouslyUnsuccessfulCount, err := sqliteDatabase.CountUnsuccessSyncRecords(cfg.ClientCfg.FileType, zoom.RecordType(cfg.ClientCfg.RecordType), unixToDateTimeString(int64(cfg.ClientCfg.Cutoff)))
+	previouslyUnsuccessfulCount, err := sqliteDatabase.CountUnsuccessSyncRecords(cfg.ClientCfg.FileType, RecordType(cfg.ClientCfg.RecordType), unixToDateTimeString(int64(cfg.ClientCfg.Cutoff)))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get count failed records")
 	}
@@ -100,12 +87,12 @@ func main() {
 	log.Info().Msg(fmt.Sprintf("Total unsynced meet count = %d", len(meetings)))
 
 	if len(meetings) > 0 && !cfg.ClientCfg.DryRun {
-		parentFolderId, err := gdrive.CreateFolderIfNotExists(srv, cfg.DriveCfg.FolderName, "")
+		parentFolderId, err := CreateFolderIfNotExists(cfg.DriveCfg.FolderName, "")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed create google drive base folder")
 		}
 		for _, fm := range meetings {
-			err = syncMeetRecordToDrive(cfg, srv, sqliteDatabase, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
+			err = syncMeetRecordToDrive(cfg, fm, cfg.ClientCfg.DownloadLocation, parentFolderId)
 			if err != nil {
 				log.Error().Err(err).Msg(fmt.Sprintf("Failed to process record with meet id = %d, topic = %s", fm.Id, fm.Topic))
 			}
@@ -161,17 +148,17 @@ func downloadFileInChunks(filepath string, filename string, url string, chunkSiz
 	return nil
 }
 
-func syncMeetRecordToDrive(cfg config, srv *drive.Service, sqlite *storage.SQLiteStorage, meet zoom.Meeting, downloadLocation, parentFolderId string) error {
+func syncMeetRecordToDrive(cfg config, meet Meeting, downloadLocation, parentFolderId string) error {
 	var err error
 	for _, fmr := range meet.Records {
 		retryCount := 0
 		for int(cfg.ClientCfg.Retry) >= retryCount {
 			filepath := fmt.Sprintf("%s/%s - %s - %d/", downloadLocation, formatFolderName(meet.Topic), meet.DateTime, meet.Id)
 			filename := fmt.Sprintf("%s.%s", string(fmr.Type), strings.ToLower(fmr.FileExtension))
-			err := syncRecordToDrive(srv, sqlite, fmr, filepath, filename, parentFolderId)
+			err := syncRecordToDrive(fmr, filepath, filename, parentFolderId)
 			if err != nil {
 				log.Error().Err(err).Msg(fmt.Sprintf("Failed to sync record from meeting = %s, retry count = %d", meet.Topic, retryCount))
-				err = sqlite.UpdateRecord(fmr.Id, zoom.Failed)
+				err = sqliteDatabase.UpdateRecord(fmr.Id, Failed)
 				if err != nil {
 					return err
 				}
@@ -185,8 +172,8 @@ func syncMeetRecordToDrive(cfg config, srv *drive.Service, sqlite *storage.SQLit
 	return err
 }
 
-func syncRecordToDrive(srv *drive.Service, sqlite *storage.SQLiteStorage, record zoom.Record, filepath, filename, parentFolderId string) error {
-	err := sqlite.UpdateRecord(record.Id, zoom.Downloading)
+func syncRecordToDrive(record Record, filepath, filename, parentFolderId string) error {
+	err := sqliteDatabase.UpdateRecord(record.Id, Downloading)
 	if err != nil {
 		return err
 	}
@@ -197,22 +184,18 @@ func syncRecordToDrive(srv *drive.Service, sqlite *storage.SQLiteStorage, record
 	}
 	defer os.RemoveAll(filepath)
 
-	err = sqlite.UpdateRecord(record.Id, zoom.Downloaded)
+	err = sqliteDatabase.UpdateRecord(record.Id, Downloaded)
 	if err != nil {
 		return err
 	}
-	err = gdrive.Upload(srv, parentFolderId, filepath, filename)
+	err = Upload(driveService, parentFolderId, filepath, filename)
 	if err != nil {
 		return err
 	}
-	err = sqlite.UpdateRecord(record.Id, zoom.Synced)
+	err = sqliteDatabase.UpdateRecord(record.Id, Synced)
 	if err != nil {
 		return err
 	}
-	// err = os.RemoveAll(filepath)
-	// if err != nil {
-	// 	return err
-	// }
 	return nil
 }
 
