@@ -3,11 +3,12 @@ package main
 import (
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
-	invalidCharsRegex  = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1F]`) // Invalid characters regex pattern
-	invalidSuffixRegex = regexp.MustCompile(`[. ]+$`)                // Invalid trailing dots and spaces regex pattern
+	invalidCharsRegex  = regexp.MustCompile(`[<>:"'/\\|?*\x00-\x1F]`) // Invalid characters regex pattern
+	invalidSuffixRegex = regexp.MustCompile(`[. ]+$`)                 // Invalid trailing dots and spaces regex pattern
 )
 
 func formatFolderName(name string) string {
@@ -26,4 +27,9 @@ func formatFolderName(name string) string {
 	}
 
 	return name
+}
+
+func unixToDateTimeString(unixtime int64) string {
+	t := time.Unix(unixtime, 0)
+	return t.Format(time.DateTime)
 }

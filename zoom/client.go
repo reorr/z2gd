@@ -300,7 +300,7 @@ func (z *ZoomClient) GetAllMeetingRecordsSince(cutoff int) ([]Meeting, error) {
 
 	path := "/users/me/recordings"
 	endpoint := z.endpoint + path
-	log.Debug().Any("endpoint", endpoint)
+	log.Debug().Any("endpoint", endpoint).Msg("Zoom endpoint")
 
 	req, err := http.NewRequest(http.MethodGet, endpoint+"?"+params.Encode(), nil)
 	if err != nil {
@@ -314,7 +314,7 @@ func (z *ZoomClient) GetAllMeetingRecordsSince(cutoff int) ([]Meeting, error) {
 	meetings := []Meeting{}
 
 	for int(to.Unix()) >= cutoff {
-		log.Debug().Any("params", params.Encode())
+		log.Debug().Any("params", params.Encode()).Msg("Zoom params")
 
 		req.URL.RawQuery = params.Encode()
 		res, err := z.client.Do(req)

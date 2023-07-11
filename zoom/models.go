@@ -12,6 +12,7 @@ const (
 	Queued      RecordStatus = "queued"
 	Downloading RecordStatus = "downloading"
 	Downloaded  RecordStatus = "downloaded"
+	Synced      RecordStatus = "synced"
 	Failed      RecordStatus = "failed"
 )
 
