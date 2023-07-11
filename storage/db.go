@@ -118,3 +118,70 @@ func (s *SQLiteStorage) GetMeeting(UUID string) (*zoom.Meeting, error) {
 	}
 	return &meeting, nil
 }
+
+// GetRecords returns records of specific meeting from the database
+func (s *SQLiteStorage) GetRecords(UUID string) ([]zoom.Record, error) {
+	q := "SELECT * FROM `records` WHERE meetingId = $1"
+	rows, err := s.DB.QueryContext(context.Background(), q, UUID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []zoom.Record
+	for rows.Next() {
+		record := zoom.Record{}
+		err := rows.Scan(
+			&record.Id,
+			&record.MeetingId,
+			&record.Type,
+			&record.DateTime,
+			&record.FileExtension,
+			&record.FileSize,
+			&record.DownloadURL,
+			&record.PlayURL,
+			&record.Status,
+			&record.FilePath)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+// GetMeeting returns a meeting from the database
+func (s *SQLiteStorage) GetMeetingWithRecords(UUID string) (*zoom.Meeting, error) {
+	q := "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime, records.id, records.meetingId, records.type, records.startTime, records.fileExtension, records.fileSize, records.downUrl, records.playUrl, records.status  FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.uuid = $1"
+	rows, err := s.DB.Query(q, UUID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errors.New("aaaa")
+		}
+		return nil, err
+	}
+	meeting := &zoom.Meeting{}
+	for rows.Next() {
+		record := &zoom.Record{}
+		err = rows.Scan(
+			meeting.UUID,
+			meeting.Id,
+			meeting.Topic,
+			meeting.StartTime,
+			record.Id,
+			record.MeetingId,
+			record.Type,
+			record.StartTime,
+			record.FileExtension,
+			record.FileExtension,
+			record.DownloadURL,
+			record.PlayURL,
+			record.Status,
+		)
+		if err != nil {
+			return nil, err
+		}
+		meeting.Records = append(meeting.Records, *record)
+	}
+	return meeting, nil
+}
