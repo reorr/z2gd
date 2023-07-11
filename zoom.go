@@ -144,6 +144,10 @@ func (z *ZoomClient) FetchAllMeetingRecordsSince(userIds []string, cutoff int) e
 		req.Header.Add(`Content-Type`, "application/json")
 
 		for int(to.Unix()) >= cutoff {
+			_, err := zclient.GetToken()
+			if err != nil {
+				return err
+			}
 			log.Debug().Any("params", params.Encode()).Msg("Zoom params")
 
 			req.URL.RawQuery = params.Encode()

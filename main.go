@@ -19,6 +19,7 @@ import (
 var (
 	sqliteDatabase *SQLiteStorage
 	driveService   *drive.Service
+	zclient        *ZoomClient
 )
 
 func main() {
@@ -52,7 +53,7 @@ func main() {
 	}
 
 	if cfg.ClientCfg.FetchAPI {
-		zclient := NewZoomClient(Client{
+		zclient = NewZoomClient(Client{
 			AccountId: cfg.ZoomCfg.AccountID,
 			Id:        cfg.ZoomCfg.ClientID,
 			Secret:    cfg.ZoomCfg.ClientSecret,
