@@ -289,9 +289,9 @@ func (s *SQLiteStorage) CountRecordsByFileExtensionAndTypeAndStatus(fileExtensio
 }
 
 func (s *SQLiteStorage) CountUnsuccessSyncRecords(fileExtension string, recordType zoom.RecordType, cutoff string) (uint, error) {
-	q := "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 status != 'synced' AND fileExtension = $2 AND type = $3"
+	q := "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2 AND type = $3"
 	if recordType == "all" {
-		q = "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 status != 'synced' AND fileExtension = $2"
+		q = "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2"
 	}
 
 	var count uint
