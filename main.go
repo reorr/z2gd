@@ -59,7 +59,7 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to connect zoom service")
 	}
 
-	zoomMeets, err := zclient.GetAllMeetingRecordsSince(int(cfg.ClientCfg.Cutoff))
+	zoomMeets, err := zclient.GetAllMeetingRecordsSince(cfg.ClientCfg.UserIds, int(cfg.ClientCfg.Cutoff))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get meeting record data")
 	}

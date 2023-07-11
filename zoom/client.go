@@ -284,62 +284,65 @@ func (z *ZoomClient) GetAllMeetingRecords() ([]Meeting, error) {
 	return meetings, nil
 }
 
-func (z *ZoomClient) GetAllMeetingRecordsSince(cutoff int) ([]Meeting, error) {
+func (z *ZoomClient) GetAllMeetingRecordsSince(userIds []string, cutoff int) ([]Meeting, error) {
 	_, err := z.GetToken()
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("unable to get token"), err)
 	}
 
-	from := time.Now().AddDate(0, 0, -30)
-	to := time.Now()
-
-	params := url.Values{}
-	params.Add(`page_size`, "300")
-	params.Add(`from`, from.Format("2006-01-02"))
-	params.Add(`to`, to.Format("2006-01-02"))
-
-	path := "/users/me/recordings"
-	endpoint := z.endpoint + path
-	log.Debug().Any("endpoint", endpoint).Msg("Zoom endpoint")
-
-	req, err := http.NewRequest(http.MethodGet, endpoint+"?"+params.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add(`Authorization`, fmt.Sprintf("Bearer %s", z.token.AccessToken))
-	req.Header.Add(`Host`, "zoom.us")
-	req.Header.Add(`Content-Type`, "application/json")
-
 	meetings := []Meeting{}
 
-	for int(to.Unix()) >= cutoff {
-		log.Debug().Any("params", params.Encode()).Msg("Zoom params")
+	for _, userId := range userIds {
+		from := time.Now().AddDate(0, 0, -30)
+		to := time.Now()
 
-		req.URL.RawQuery = params.Encode()
-		res, err := z.client.Do(req)
+		params := url.Values{}
+		params.Add(`page_size`, "300")
+		params.Add(`from`, from.Format("2006-01-02"))
+		params.Add(`to`, to.Format("2006-01-02"))
+
+		path := "/users/%s/recordings"
+		pathWithUserId := fmt.Sprintf(path, userId)
+		endpoint := z.endpoint + pathWithUserId
+		log.Debug().Any("endpoint", endpoint).Msg("Zoom endpoint")
+
+		req, err := http.NewRequest(http.MethodGet, endpoint+"?"+params.Encode(), nil)
 		if err != nil {
 			return nil, err
 		}
-		defer res.Body.Close()
 
-		if res.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("unable to authorize with account id: %s and client id: %s, status %d, message: %s", z.cfg.AccountId, z.cfg.Id, res.StatusCode, res.Body)
+		req.Header.Add(`Authorization`, fmt.Sprintf("Bearer %s", z.token.AccessToken))
+		req.Header.Add(`Host`, "zoom.us")
+		req.Header.Add(`Content-Type`, "application/json")
+
+		for int(to.Unix()) >= cutoff {
+			log.Debug().Any("params", params.Encode()).Msg("Zoom params")
+
+			req.URL.RawQuery = params.Encode()
+			res, err := z.client.Do(req)
+			if err != nil {
+				return nil, err
+			}
+			defer res.Body.Close()
+
+			if res.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("unable to authorize with account id: %s and client id: %s, status %d, message: %s", z.cfg.AccountId, z.cfg.Id, res.StatusCode, res.Body)
+			}
+
+			recordings := &Recordings{}
+
+			if err := json.NewDecoder(res.Body).Decode(recordings); err != nil {
+				return nil, err
+			}
+
+			meetings = append(meetings, recordings.Meetings...)
+
+			from = from.AddDate(0, 0, -30)
+			to = to.AddDate(0, 0, -30)
+			params.Set(`from`, from.Format("2006-01-02"))
+			params.Set(`to`, to.Format("2006-01-02"))
+			time.Sleep(500 * time.Millisecond) // avoid rate limit
 		}
-
-		recordings := &Recordings{}
-
-		if err := json.NewDecoder(res.Body).Decode(recordings); err != nil {
-			return nil, err
-		}
-
-		meetings = append(meetings, recordings.Meetings...)
-
-		from = from.AddDate(0, 0, -30)
-		to = to.AddDate(0, 0, -30)
-		params.Set(`from`, from.Format("2006-01-02"))
-		params.Set(`to`, to.Format("2006-01-02"))
-		time.Sleep(500 * time.Millisecond) // avoid rate limit
 	}
 
 	return meetings, nil

@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -50,6 +51,16 @@ func loadEnvBool(key string, result *bool) {
 	}
 }
 
+func loadEnvSliceOfString(key string, result *[]string) {
+	s, ok := os.LookupEnv(key)
+	if !ok {
+		return
+	}
+
+	results := strings.Split(s, ",")
+	*result = append(*result, results...)
+}
+
 /* Configuration */
 type zoomConfig struct {
 	ClientID     string `yaml:"client_id" json:"client_id"`
@@ -89,13 +100,14 @@ func (d *driveConfig) loadFromEnv() {
 }
 
 type clientConfig struct {
-	DownloadLocation string `yaml:"download_location" json:"download_location"`
-	DbLocation       string `yaml:"db_location" json:"db_location"`
-	FileType         string `yaml:"file_type" json:"file_type"`
-	RecordType       string `yaml:"record_type" json:"record_type"`
-	Cutoff           uint   `yaml:"cutoff" json:"cutoff"`
-	DryRun           bool   `yaml:"dry_run" json:"dry_run"`
-	Retry            uint   `yaml:"retry" json:"retry"`
+	DownloadLocation string   `yaml:"download_location" json:"download_location"`
+	DbLocation       string   `yaml:"db_location" json:"db_location"`
+	FileType         string   `yaml:"file_type" json:"file_type"`
+	RecordType       string   `yaml:"record_type" json:"record_type"`
+	Cutoff           uint     `yaml:"cutoff" json:"cutoff"`
+	DryRun           bool     `yaml:"dry_run" json:"dry_run"`
+	Retry            uint     `yaml:"retry" json:"retry"`
+	UserIds          []string `yaml:"user_ids" json:"user_ids"`
 }
 
 func defaultClientConfig() clientConfig {
@@ -107,6 +119,7 @@ func defaultClientConfig() clientConfig {
 		Cutoff:           1688169600,
 		DryRun:           true,
 		Retry:            0,
+		UserIds:          []string{},
 	}
 }
 
@@ -118,6 +131,7 @@ func (d *clientConfig) loadFromEnv() {
 	loadEnvUint("ZDG_CLIENT_CUTOFF", &d.Cutoff)
 	loadEnvBool("ZDG_CLIENT_DRY_RUN", &d.DryRun)
 	loadEnvUint("ZDG_CLIENT_Retry", &d.Retry)
+	loadEnvSliceOfString("ZDG_CLIENT_USER_IDS", &d.UserIds)
 }
 
 type config struct {
