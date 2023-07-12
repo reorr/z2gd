@@ -69,7 +69,7 @@ func main() {
 		}
 	}
 
-	previouslyUnsuccessfulCount, err := sqliteDatabase.CountUnsuccessSyncRecords(cfg.ClientCfg.FileType, RecordType(cfg.ClientCfg.RecordType), unixToDateTimeString(int64(cfg.ClientCfg.Cutoff)))
+	previouslyUnsuccessfulCount, err := sqliteDatabase.CountUnsuccessSyncRecords(cfg.ClientCfg.FileType, cfg.ClientCfg.RecordType, unixToDateTimeString(int64(cfg.ClientCfg.Cutoff)))
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to get count failed records")
 	}

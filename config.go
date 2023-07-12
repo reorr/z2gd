@@ -104,7 +104,7 @@ type clientConfig struct {
 	DownloadLocation string   `yaml:"download_location" json:"download_location"`
 	DbLocation       string   `yaml:"db_location" json:"db_location"`
 	FileType         string   `yaml:"file_type" json:"file_type"`
-	RecordType       string   `yaml:"record_type" json:"record_type"`
+	RecordType       []string `yaml:"record_type" json:"record_type"`
 	Cutoff           uint     `yaml:"cutoff" json:"cutoff"`
 	DryRun           bool     `yaml:"dry_run" json:"dry_run"`
 	Retry            uint     `yaml:"retry" json:"retry"`
@@ -117,7 +117,7 @@ func defaultClientConfig() clientConfig {
 		DownloadLocation: "/tmp",
 		DbLocation:       "./data.db",
 		FileType:         "TXT",
-		RecordType:       "chat_file",
+		RecordType:       []string{},
 		Cutoff:           1688169600,
 		DryRun:           true,
 		Retry:            0,
@@ -130,7 +130,7 @@ func (d *clientConfig) loadFromEnv() {
 	loadEnvStr("ZDG_CLIENT_DOWNLOAD_LOCATION", &d.DownloadLocation)
 	loadEnvStr("ZDG_CLIENT_DB_LOCATION", &d.DbLocation)
 	loadEnvStr("ZDG_CLIENT_FILE_TYPE", &d.FileType)
-	loadEnvStr("ZDG_CLIENT_RECORD_TYPE", &d.RecordType)
+	loadEnvSliceOfString("ZDG_CLIENT_RECORD_TYPE", &d.RecordType)
 	loadEnvUint("ZDG_CLIENT_CUTOFF", &d.Cutoff)
 	loadEnvBool("ZDG_CLIENT_DRY_RUN", &d.DryRun)
 	loadEnvUint("ZDG_CLIENT_Retry", &d.Retry)

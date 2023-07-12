@@ -12,7 +12,7 @@ client:
   download_location: /tmp
   db_location: file:./data.db
   file_type: MP4
-  record_type: chat_file
+  record_type: []
   cutoff: 1685846792
   dry_run: true
   retry: 0

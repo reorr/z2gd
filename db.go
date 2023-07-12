@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -148,13 +149,20 @@ func (s *SQLiteStorage) GetRecords(UUID string) ([]Record, error) {
 	return records, nil
 }
 
-func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType, fileExtension string) ([]Record, error) {
-	q := "SELECT * FROM `records` WHERE meetingId = $1 AND fileExtension = $2 AND type = $3"
-	if recordType == "all" {
+func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID string, recordType []string, fileExtension string) ([]Record, error) {
+	var str string
+	for i, value := range recordType {
+		str += "'" + value + "'"
+		if i < len(recordType)-1 {
+			str += ","
+		}
+	}
+	q := fmt.Sprintf("SELECT * FROM `records` WHERE meetingId = $1 AND fileExtension = $2 AND type IN (%s)", str)
+	if len(recordType) == 0 {
 		q = "SELECT * FROM `records` WHERE meetingId = $1 AND fileExtension = $2"
 	}
 	log.Debug().Any("query", q).Msg("Find records by query")
-	rows, err := s.DB.QueryContext(context.Background(), q, UUID, fileExtension, recordType)
+	rows, err := s.DB.QueryContext(context.Background(), q, UUID, fileExtension)
 	if err != nil {
 		return nil, err
 	}
@@ -182,13 +190,20 @@ func (s *SQLiteStorage) GetRecordsByFileExtensionAndRecordType(UUID, recordType,
 	return records, nil
 }
 
-func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtension, recordType, cutoff string) ([]Meeting, error) {
-	q := "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 AND records.type = $3 GROUP BY meetings.uuid ORDER BY meetings.startTime DESC;"
-	if recordType == "all" {
+func (s *SQLiteStorage) GetUniqueMeetingByFileExtensionAndRecordType(fileExtension string, recordType []string, cutoff string) ([]Meeting, error) {
+	var str string
+	for i, value := range recordType {
+		str += "'" + value + "'"
+		if i < len(recordType)-1 {
+			str += ","
+		}
+	}
+	q := fmt.Sprintf("SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 AND records.type IN (%s) GROUP BY meetings.uuid ORDER BY meetings.startTime DESC;", str)
+	if len(recordType) == 0 {
 		q = "SELECT meetings.uuid, meetings.id, meetings.topic, meetings.startTime FROM `meetings` JOIN `records` ON meetings.uuid = records.meetingId WHERE meetings.startTime >= $1 AND records.status != 'synced' AND records.fileExtension = $2 GROUP BY meetings.uuid ORDER BY meetings.startTime DESC;"
 	}
 	log.Debug().Any("query", q).Msg("Find meetings by query")
-	rows, err := s.DB.QueryContext(context.Background(), q, cutoff, fileExtension, recordType)
+	rows, err := s.DB.QueryContext(context.Background(), q, cutoff, fileExtension)
 	if err != nil {
 		return nil, err
 	}
@@ -286,14 +301,24 @@ func (s *SQLiteStorage) CountRecordsByFileExtensionAndTypeAndStatus(fileExtensio
 	return count, err
 }
 
-func (s *SQLiteStorage) CountUnsuccessSyncRecords(fileExtension string, recordType RecordType, cutoff string) (uint, error) {
-	q := "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2 AND type = $3"
-	if recordType == "all" {
+func (s *SQLiteStorage) CountUnsuccessSyncRecords(fileExtension string, recordType []string, cutoff string) (uint, error) {
+	var str string
+	for i, value := range recordType {
+		str += "'" + value + "'"
+		if i < len(recordType)-1 {
+			str += ","
+		}
+	}
+
+	q := fmt.Sprintf("SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2 AND type IN (%s)", str)
+	if len(recordType) == 0 {
 		q = "SELECT COUNT(*) FROM `records` WHERE startTime >= $1 AND status != 'synced' AND fileExtension = $2"
 	}
 
+	log.Debug().Any("query", q).Msg("Find previously unsuccess meetings by query")
+
 	var count uint
-	rows, err := s.DB.Query(q, cutoff, fileExtension, recordType)
+	rows, err := s.DB.Query(q, cutoff, fileExtension)
 	if err != nil {
 		return count, err
 	}
